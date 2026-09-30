@@ -1,8 +1,1 @@
-{
-  "name": "musical-carnival",
-  "version": "0.1.0",
-  "description": "My first Claude Code plugin",
-  "author": {
-    "name": "killtrillpill"
-  }
-}
+{"name": "musical-carnival", "version": "0.2.0", "description": "Russian-language helper skills for learning programming: explain code, review code for bugs, and write git commit messages.", "author": {"name": "killtrillpill"}, "license": "MIT"}
