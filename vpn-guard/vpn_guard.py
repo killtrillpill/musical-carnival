@@ -27,6 +27,7 @@ import re
 import secrets
 import signal
 import socket
+import socketserver
 import subprocess
 import sys
 import threading
@@ -1345,6 +1346,14 @@ def open_panel(url):
     webbrowser.open(url)
 
 
+class QuickServer(ThreadingHTTPServer):
+    """Стандартный сервер при старте делает обратный DNS-запрос (getfqdn), на Windows это
+    может висеть десятки секунд. Здесь он не нужен."""
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[0], self.server_address[1]
+
+
 def _ping_existing(port):
     import urllib.request
     try:
@@ -1382,7 +1391,7 @@ def main(argv=None):
     server = None
     for p in range(args.port, args.port + 10):
         try:
-            server = ThreadingHTTPServer(("127.0.0.1", p), handler)
+            server = QuickServer(("127.0.0.1", p), handler)
             ctx.port = p
             break
         except OSError:
