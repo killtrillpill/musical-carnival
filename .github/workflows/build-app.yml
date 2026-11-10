@@ -27,7 +27,7 @@ jobs:
           $g.FillEllipse((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(36,87,214))), 2,2,60,60)
           $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::White), 7
           $pen.StartCap = 'Round'; $pen.EndCap = 'Round'; $pen.LineJoin = 'Round'
-          $g.DrawLines($pen, @((New-Object System.Drawing.Point 18,33), (New-Object System.Drawing.Point 28,43), (New-Object System.Drawing.Point 46,21)))
+          $g.DrawLines($pen, [System.Drawing.Point[]]@((New-Object System.Drawing.Point 18,33), (New-Object System.Drawing.Point 28,43), (New-Object System.Drawing.Point 46,21)))
           $ico = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
           $fs = [IO.File]::Create("$PWD/$d/app/icon.ico"); $ico.Save($fs); $fs.Close()
           $ps1 = @'
@@ -42,7 +42,7 @@ jobs:
           $s.Save()
           '@
           Set-Content "$d/app/make-shortcut.ps1" -Value ($ps1 -replace '(?m)^ {10}','') -Encoding UTF8
-          Set-Content "$d/Создать ярлык на рабочем столе.bat" -Encoding ASCII -Value '@echo off','powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0app\make-shortcut.ps1"','echo Ярлык VPN Guard создан на рабочем столе.','pause'
+          Set-Content "$d/Создать ярлык на рабочем столе.bat" -Encoding ASCII -Value '@echo off','powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0app\make-shortcut.ps1"','echo Shortcut VPN Guard created on Desktop.','pause'
           if (-not (Test-Path "$d/app/icon.ico")) { exit 1 }
           & "$d/python/python.exe" "$d/app/vpn_guard.py" --diagnose | Select-Object -First 5
       - name: Smoke test (start like a user would, hit the API)
