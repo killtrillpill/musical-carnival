@@ -764,8 +764,8 @@ header{display:flex;align-items:center;justify-content:space-between;gap:12px;pa
 .grid .card{margin:0}
 .wide{grid-column:1/-1}
 @media (max-width:760px){.grid{grid-template-columns:1fr}}
-.pill{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;font-weight:600;font-size:16px}
-.pill .dot{width:12px;height:12px;border-radius:50%;flex:none;background:currentColor}
+.pill{display:flex;align-items:center;gap:14px;padding:22px 20px;border-radius:14px;font-weight:650;font-size:19px}
+.pill .dot{width:16px;height:16px;border-radius:50%;flex:none;background:currentColor}
 .pill.ok{background:var(--okbg);color:var(--ok)} .pill.bad{background:var(--badbg);color:var(--bad)}
 .pill.off{background:var(--line);color:var(--muted)} .pill.wait{background:var(--warnbg);color:var(--warn)}
 .sub{color:var(--muted);margin:8px 2px 0;font-size:13.5px}
@@ -808,6 +808,12 @@ textarea{min-height:64px;resize:vertical;font-family:ui-monospace,Menlo,Consolas
 pre#diag{white-space:pre-wrap;font-size:12px;background:var(--field);border:1px solid var(--line);border-radius:10px;padding:10px;max-height:300px;overflow:auto}
 .mini{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:13px}
 .mini span b{font-weight:600}
+.av{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700}
+.chip{padding-left:5px;font-size:14.5px}
+details.card>summary{cursor:pointer;font-weight:650;font-size:15px;list-style:none}
+details.card>summary::before{content:"▸ ";color:var(--muted)}
+details[open].card>summary::before{content:"▾ "}
+details.card[open]>summary{margin-bottom:12px}
 .stopped{text-align:center;padding:60px 10px}
 </style>
 </head>
@@ -868,8 +874,8 @@ pre#diag{white-space:pre-wrap;font-size:12px;background:var(--field);border:1px 
   <div class="hint">Программа закрывается сразу, как только её откроют без VPN. Если заблокируешь браузер, в котором открыта эта страница, вкладка тоже закроется.</div>
 </section>
 
-<section class="card wide">
-  <h2>3. Лимиты и скорость реакции</h2>
+<details class="card wide">
+  <summary>3. Лимиты и скорость реакции <small style="font-weight:400;color:var(--muted)">- можно не трогать</small></summary>
   <div class="row" id="limitPresets" style="margin-bottom:6px"></div>
   <div class="nums">
     <div><label class="f" for="lInterval">Проверять каждые, сек</label><input type="number" id="lInterval" step="0.5" min="0.5" max="30"></div>
@@ -886,7 +892,7 @@ pre#diag{white-space:pre-wrap;font-size:12px;background:var(--field);border:1px 
       <div class="hint">Проверка идёт по TCP-порту 443 (или host:порт). Достаточно ответа от любого адреса.</div>
     </div>
   </div>
-</section>
+</details>
 
 <section class="card">
   <h2>Журнал</h2>
@@ -945,6 +951,7 @@ function renderStatus() {
   if (s.last_kill) parts.push("последнее закрытие: " + s.last_kill);
   $("#statusSub").textContent = parts.join("  ·  ");
   const lg = $("#log"); lg.textContent = "";
+  if (!S.events.length) lg.append(el("div", "t", "Событий пока нет"));
   S.events.slice().reverse().forEach(e => { const d = el("div", e.lvl); d.append(el("span", "t", e.t), document.createTextNode(e.msg)); lg.append(d); });
   $("#autostart").checked = !!S.autostart;
 }
@@ -953,7 +960,7 @@ function renderApps() {
   const box = $("#appChips"); box.textContent = "";
   if (!apps.length) box.append(el("span", "hint", "Список пуст - добавь программы ниже"));
   apps.forEach((a, i) => {
-    const c = el("span", "chip", a); const b = el("button", "", "×"); b.title = "Убрать"; b.type = "button";
+    const c = el("span", "chip"); c.append(el("span", "av", a[0].toUpperCase()), document.createTextNode(a)); const b = el("button", "", "×"); b.title = "Убрать"; b.type = "button";
     b.onclick = () => { apps.splice(i, 1); renderApps(); scheduleSave(); };
     c.append(b); box.append(c);
   });
