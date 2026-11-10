@@ -1,0 +1,31 @@
+name: Build VPN Guard app
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pyinstaller
+      - name: Build
+        working-directory: vpn-guard
+        run: pyinstaller --noconfirm --windowed --name "VPN Guard" vpn_guard.py
+      - name: Zip (mac)
+        if: runner.os == 'macOS'
+        working-directory: vpn-guard/dist
+        run: ditto -c -k --keepParent "VPN Guard.app" "../../VPN-Guard-mac.zip"
+      - name: Zip (win)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "vpn-guard/dist/VPN Guard/*" -DestinationPath VPN-Guard-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VPN-Guard-${{ runner.os }}
+          path: VPN-Guard-*.zip

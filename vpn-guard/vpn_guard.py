@@ -661,18 +661,19 @@ def _script_path():
 def autostart_target():
     """-> (путь_файла, содержимое_bytes) для текущей ОС."""
     exe, script = sys.executable, _script_path()
+    frozen = getattr(sys, "frozen", False)        # собранное приложение (PyInstaller)
     if IS_WIN:
         pw = os.path.join(os.path.dirname(exe), "pythonw.exe")
-        runner = pw if os.path.exists(pw) else exe
+        runner = pw if os.path.exists(pw) and not frozen else exe
         folder = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")),
                               "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
-        body = '@echo off\r\nchcp 65001 >nul\r\nstart "" /min "%s" "%s" --no-browser\r\n' % (runner, script)
+        body = '@echo off\r\nchcp 65001 >nul\r\nstart "" /min "%s" %s--no-browser\r\n' % (runner, "" if frozen else '"%s" ' % script)
         return os.path.join(folder, "vpn-guard.bat"), body.encode("utf-8")
     if IS_MAC:
         logp = os.path.join(config_dir(), "launchd.log")
         plist = {
             "Label": "com.vpnguard.agent",
-            "ProgramArguments": [exe, script, "--no-browser"],
+            "ProgramArguments": [exe] + ([] if frozen else [script]) + ["--no-browser"],
             "RunAtLoad": True,
             "KeepAlive": {"SuccessfulExit": False},
             "StandardOutPath": logp,
@@ -681,7 +682,7 @@ def autostart_target():
         return (os.path.expanduser("~/Library/LaunchAgents/com.vpnguard.agent.plist"),
                 plistlib.dumps(plist))
     folder = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "autostart")
-    body = "[Desktop Entry]\nType=Application\nName=VPN Guard\nExec=\"%s\" \"%s\" --no-browser\n" % (exe, script)
+    body = "[Desktop Entry]\nType=Application\nName=VPN Guard\nExec=\"%s\" %s--no-browser\n" % (exe, "" if frozen else '"%s" ' % script)
     return os.path.join(folder, "vpn-guard.desktop"), body.encode("utf-8")
 
 
@@ -1313,6 +1314,30 @@ def make_handler(ctx):
 
 # ================================================================ запуск ====
 
+def open_panel(url):
+    """Открывает панель как отдельное окно-приложение (Chrome/Edge --app), иначе в браузере."""
+    cands = []
+    if IS_WIN:
+        for env in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+            b = os.environ.get(env, "")
+            cands += [os.path.join(b, r"Microsoft\Edge\Application\msedge.exe"),
+                      os.path.join(b, r"Google\Chrome\Application\chrome.exe")]
+    elif IS_MAC:
+        cands = ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                 "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+                 "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"]
+    for c in cands:
+        if os.path.exists(c):
+            try:
+                prof = os.path.join(config_dir(), "window")
+                subprocess.Popen([c, "--app=" + url, "--user-data-dir=" + prof, "--window-size=980,860", "--no-first-run"],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return
+            except OSError:
+                pass
+    webbrowser.open(url)
+
+
 def _ping_existing(port):
     import urllib.request
     try:
@@ -1324,6 +1349,9 @@ def _ping_existing(port):
 
 
 def main(argv=None):
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name) is None:                  # приложение без консоли
+            setattr(sys, name, open(os.devnull, "w"))
     ap = argparse.ArgumentParser(description="VPN Guard: блокирует выбранные приложения без VPN")
     ap.add_argument("--no-browser", action="store_true", help="не открывать панель в браузере")
     ap.add_argument("--diagnose", action="store_true", help="напечатать диагностику и выйти")
@@ -1340,7 +1368,7 @@ def main(argv=None):
             url = "http://127.0.0.1:%d/?t=%s" % (p, store.token)
             print("VPN Guard уже запущен. Открываю панель:", url)
             if not args.no_browser:
-                webbrowser.open(url)
+                open_panel(url)
             return 0
 
     ctx = Ctx()
@@ -1375,7 +1403,7 @@ def main(argv=None):
     print("  Остановить: Ctrl+C или кнопка в панели.")
     print("=" * 60)
     if not args.no_browser:
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.6, lambda: open_panel(url)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
