@@ -19,6 +19,31 @@ jobs:
           Copy-Item vpn-guard/vpn_guard.py "$d/app/"
           Set-Content "$d/Запустить VPN Guard.bat" -Encoding ASCII -Value '@echo off', 'cd /d "%~dp0"', 'start "" "python\pythonw.exe" "app\vpn_guard.py"'
           Set-Content "$d/Диагностика.bat" -Encoding ASCII -Value '@echo off', 'cd /d "%~dp0"', 'python\python.exe app\vpn_guard.py --diagnose', 'pause'
+          Add-Type -AssemblyName System.Drawing
+          $bmp = New-Object System.Drawing.Bitmap 64,64
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.SmoothingMode = 'AntiAlias'
+          $g.Clear([System.Drawing.Color]::Transparent)
+          $g.FillEllipse((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(36,87,214))), 2,2,60,60)
+          $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::White), 7
+          $pen.StartCap = 'Round'; $pen.EndCap = 'Round'; $pen.LineJoin = 'Round'
+          $g.DrawLines($pen, @((New-Object System.Drawing.Point 18,33), (New-Object System.Drawing.Point 28,43), (New-Object System.Drawing.Point 46,21)))
+          $ico = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+          $fs = [IO.File]::Create("$PWD/$d/app/icon.ico"); $ico.Save($fs); $fs.Close()
+          $ps1 = @'
+          $root = Split-Path -Parent $PSScriptRoot
+          $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'VPN Guard.lnk'
+          $s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
+          $s.TargetPath = "$root\python\pythonw.exe"
+          $s.Arguments = '"' + "$root\app\vpn_guard.py" + '"'
+          $s.WorkingDirectory = $root
+          $s.IconLocation = "$root\app\icon.ico"
+          $s.Description = 'VPN Guard'
+          $s.Save()
+          '@
+          Set-Content "$d/app/make-shortcut.ps1" -Value ($ps1 -replace '(?m)^ {10}','') -Encoding UTF8
+          Set-Content "$d/Создать ярлык на рабочем столе.bat" -Encoding ASCII -Value '@echo off','powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0app\make-shortcut.ps1"','echo Ярлык VPN Guard создан на рабочем столе.','pause'
+          if (-not (Test-Path "$d/app/icon.ico")) { exit 1 }
           & "$d/python/python.exe" "$d/app/vpn_guard.py" --diagnose | Select-Object -First 5
       - name: Smoke test (start like a user would, hit the API)
         shell: pwsh
