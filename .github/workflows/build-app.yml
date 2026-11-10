@@ -20,6 +20,22 @@ jobs:
           Set-Content "$d/Запустить VPN Guard.bat" -Encoding ASCII -Value '@echo off', 'cd /d "%~dp0"', 'start "" "python\pythonw.exe" "app\vpn_guard.py"'
           Set-Content "$d/Диагностика.bat" -Encoding ASCII -Value '@echo off', 'cd /d "%~dp0"', 'python\python.exe app\vpn_guard.py --diagnose', 'pause'
           & "$d/python/python.exe" "$d/app/vpn_guard.py" --diagnose | Select-Object -First 5
+      - name: Smoke test (start like a user would, hit the API)
+        shell: pwsh
+        run: |
+          $env:VPN_GUARD_HOME = "$PWD\smoke"
+          $p = Start-Process "VPN-Guard/python/pythonw.exe" -ArgumentList "VPN-Guard/app/vpn_guard.py","--no-browser","--port","47888" -PassThru
+          Start-Sleep 5
+          if ($p.HasExited) { Write-Host "pythonw EXITED code $($p.ExitCode)"; if (Test-Path smoke/crash.log) { Get-Content smoke/crash.log }; exit 1 }
+          $tok = (Get-Content smoke/token).Trim()
+          $h = @{ "X-Token" = $tok }
+          $st = Invoke-RestMethod "http://127.0.0.1:47888/api/state" -Headers $h
+          "status: $($st.status.status) first_run: $($st.first_run)"
+          $r = Invoke-RestMethod "http://127.0.0.1:47888/api/selftest" -Method Post -Headers $h -ContentType "application/json" -Body "{}"
+          $r.checks | ForEach-Object { "$($_.ok) | $($_.title) | $($_.detail)" }
+          $pr = Invoke-RestMethod "http://127.0.0.1:47888/api/processes" -Headers $h
+          "processes: $($pr.names.Count)"
+          Stop-Process $p
       - uses: actions/upload-artifact@v4
         with:
           name: VPN-Guard-Windows

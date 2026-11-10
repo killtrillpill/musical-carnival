@@ -1427,5 +1427,28 @@ def main(argv=None):
     return 0
 
 
+def _crash(ex):
+    """Без консоли ошибку не видно: пишем в crash.log и показываем окно."""
+    import traceback
+    text = traceback.format_exc()
+    try:
+        os.makedirs(config_dir(), exist_ok=True)
+        with open(os.path.join(config_dir(), "crash.log"), "a", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n" + text + "\n")
+    except OSError:
+        pass
+    if IS_WIN:
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, "VPN Guard не запустился:\n\n%s\n\nПодробности: %s" % (
+                text.strip().splitlines()[-1], os.path.join(config_dir(), "crash.log")), "VPN Guard", 0x10)
+        except Exception:
+            pass
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as _ex:
+        _crash(_ex)
+        sys.exit(1)
