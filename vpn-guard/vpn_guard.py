@@ -371,14 +371,20 @@ def _kill_pid(pid):
         return False
 
 
+LAST_FAILED = []      # что не удалось закрыть при последнем вызове kill_apps
+
+
 def kill_apps(names, vpn_keyword=""):
     """Закрывает приложения. -> список закрытых имён."""
     me = {os.getpid(), os.getppid()}
-    killed = []
-    for p in match_apps(list_processes(), names, vpn_keyword, me):
+    global LAST_FAILED
+    killed, tried = [], match_apps(list_processes(), names, vpn_keyword, me)
+    for p in tried:
         if _kill_pid(p["pid"]):
             killed.append(p["bundle"] or p["name"])
-    return sorted(set(killed))
+    alive = {p["pid"] for p in list_processes()} if tried else set()
+    LAST_FAILED = sorted({p["bundle"] or p["name"] for p in tried if p["pid"] in alive})
+    return sorted(set(killed) - set(LAST_FAILED))
 
 
 # ---- проверка интернета -----------------------------------------------------
@@ -626,6 +632,8 @@ class Monitor(threading.Thread):
             if killed:
                 log("bad", "закрыто: %s" % ", ".join(killed))
                 self._set(last_kill=time.strftime("%H:%M:%S") + " " + ", ".join(killed))
+            if LAST_FAILED:
+                log("warn", "НЕ удалось закрыть: %s (запусти VPN Guard от администратора)" % ", ".join(LAST_FAILED))
         self.was = now
         self._set(status="ok" if now else "blocked", reason="" if now else why)
 
@@ -889,9 +897,11 @@ pre#diag{white-space:pre-wrap;font-size:12px;background:var(--field);border:1px 
   <label class="switch"><input type="checkbox" id="autostart"><span class="slider"></span><span>Запускать при входе в систему</span></label>
   <div class="hint">Без запущенной программы защиты нет. Автозапуск стартует её в фоне.</div>
   <div class="row" style="margin-top:12px">
+    <button class="btn small primary" id="testBtn" type="button">Проверить, работает ли защита</button>
     <button class="btn small" id="diagBtn" type="button">Диагностика</button>
     <button class="btn small danger" id="stopBtn" type="button">Остановить программу</button>
   </div>
+  <div id="testRes" class="hint"></div>
   <pre id="diag" hidden></pre>
 </section>
 </div>
@@ -1038,6 +1048,13 @@ function bind() {
     try { const r = await api("/api/autostart", "POST", {on: e.target.checked}); e.target.checked = r.on; toast(r.on ? "Автозапуск включён" : "Автозапуск выключен"); }
     catch (x) { toast(x.message, true); e.target.checked = !e.target.checked; }
   };
+  $("#testBtn").onclick = async () => {
+    const b = $("#testRes"); b.textContent = "Проверяю…";
+    try {
+      const cs = (await api("/api/selftest", "POST", {})).checks; b.textContent = "";
+      cs.forEach(c => { const d = el("div", c.ok ? "ok" : "bad", (c.ok ? "✓ " : "✗ ") + c.title + (c.detail ? " - " + c.detail : "")); d.style.color = c.ok ? "var(--ok)" : "var(--bad)"; b.append(d); });
+    } catch (e) { b.textContent = e.message; }
+  };
   $("#diagBtn").onclick = async () => {
     const p = $("#diag"); if (!p.hidden) { p.hidden = true; return; }
     p.hidden = false; p.textContent = "Собираю данные…";
@@ -1167,6 +1184,28 @@ def calibrate(ctx):
             "message": "Найден признак: %s. Режим установлен." % label}
 
 
+def selftest(ctx):
+    """Проверка «работает ли защита»: [{ok, title, detail}]. Ничего не закрывает."""
+    cfg, out = ctx.store.get(), []
+    add = lambda ok, t, d="": out.append({"ok": ok, "title": t, "detail": d})
+    procs = list_processes()
+    add(len(procs) > 5, "Список процессов читается", "найдено: %d" % len(procs))
+    vp = cfg["vpn"]["process"]
+    if vp:
+        f = find_vpn_processes(vp, procs)
+        add(bool(f), "Программа VPN «%s» запущена" % vp, ", ".join(sorted({p["name"] for p in f})) or "не найдена - запусти её")
+    px, tn = sig_proxy(), sig_tunnel()
+    add(px or tn, "VPN подключён (признак найден)", "прокси: %s, туннель: %s" % ("да" if px else "нет", "да" if tn else "нет"))
+    lim = cfg["limits"]
+    add(check_internet(lim["hosts"], lim["net_timeout_ms"]), "Интернет отвечает", ", ".join(lim["hosts"]))
+    hit = match_apps(procs, cfg["apps"], vp, {os.getpid()})
+    names = ", ".join(sorted({p["bundle"] or p["name"] for p in hit}))
+    add(True, "Без VPN будет закрыто: " + (names or "ничего (сейчас эти программы не запущены)"), "реально ничего не закрывалось")
+    add(bool(cfg["enabled"]), "Защита включена", "" if cfg["enabled"] else "включи переключатель сверху")
+    add(ctx.monitor.is_alive(), "Монитор работает")
+    return out
+
+
 def make_handler(ctx):
     class Handler(BaseHTTPRequestHandler):
         server_version = "VPNGuard/" + VERSION
@@ -1255,6 +1294,8 @@ def make_handler(ctx):
                 return self._json(200, {"ok": True, "config": ctx.store.get(), "version": ctx.store.version})
             if u.path == "/api/calibrate":
                 return self._json(200, calibrate(ctx))
+            if u.path == "/api/selftest":
+                return self._json(200, {"checks": selftest(ctx)})
             if u.path == "/api/autostart":
                 try:
                     return self._json(200, {"on": autostart_set(bool(body.get("on")))})

@@ -39,6 +39,7 @@ chk("config.json сохранён на диск", "Discord" in c["apps"] and c["
 s, j, _ = req("GET", "/api/processes"); chk("список процессов", s == 200 and isinstance(j, (list, dict)), s)
 s, j, _ = req("GET", "/api/diagnose"); chk("диагностика", s == 200, s)
 s, j, _ = req("POST", "/api/calibrate", {}); chk("calibrate отвечает", s == 200, (s, j))
+s, j, _ = req("POST", "/api/selftest", {}); chk("selftest отвечает", s == 200 and len(j["checks"]) >= 5, (s, j))
 s, j, _ = req("POST", "/api/autostart", {"enabled": True}); chk("autostart on", s == 200, (s, j))
 for root, _, fs in os.walk(home):
     for f in fs: print("     файл автозапуска:", os.path.join(root, f))
