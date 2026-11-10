@@ -1367,7 +1367,7 @@ def _ping_existing(port):
 def main(argv=None):
     for name in ("stdout", "stderr"):
         if getattr(sys, name) is None:                  # приложение без консоли
-            setattr(sys, name, open(os.devnull, "w"))
+            setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
         else:
             try:
                 getattr(sys, name).reconfigure(encoding="utf-8", errors="replace")   # русский в консоли Windows
