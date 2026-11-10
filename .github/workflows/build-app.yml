@@ -25,7 +25,9 @@ jobs:
         run: |
           $env:VPN_GUARD_HOME = "$PWD\smoke"
           $p = Start-Process "VPN-Guard/python/pythonw.exe" -ArgumentList "VPN-Guard/app/vpn_guard.py","--no-browser","--port","47888" -PassThru
-          Start-Sleep 5
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          do { Start-Sleep -Milliseconds 300; try { Invoke-RestMethod 'http://127.0.0.1:47888/api/ping' | Out-Null; $up = $true } catch { $up = $false } } until ($up -or $sw.Elapsed.TotalSeconds -gt 40)
+          "server up: $up after $($sw.Elapsed.TotalSeconds) s"
           if ($p.HasExited) { Write-Host "pythonw EXITED code $($p.ExitCode)"; if (Test-Path smoke/crash.log) { Get-Content smoke/crash.log }; exit 1 }
           $tok = (Get-Content smoke/token).Trim()
           $h = @{ "X-Token" = $tok }

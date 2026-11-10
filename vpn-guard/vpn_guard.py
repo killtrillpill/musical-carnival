@@ -1375,14 +1375,6 @@ def main(argv=None):
         print(diagnose_text(store))
         return 0
 
-    for p in range(args.port, args.port + 10):
-        if _ping_existing(p):
-            url = "http://127.0.0.1:%d/?t=%s" % (p, store.token)
-            print("VPN Guard уже запущен. Открываю панель:", url)
-            if not args.no_browser:
-                open_panel(url)
-            return 0
-
     ctx = Ctx()
     ctx.store = store
     ctx.html = HTML
@@ -1394,7 +1386,12 @@ def main(argv=None):
             ctx.port = p
             break
         except OSError:
-            continue
+            if _ping_existing(p):               # порт занят нашей же программой - просто открываем панель
+                url = "http://127.0.0.1:%d/?t=%s" % (p, store.token)
+                print("VPN Guard уже запущен. Открываю панель:", url)
+                if not args.no_browser:
+                    open_panel(url)
+                return 0
     if server is None:
         print("Не удалось занять порт %d-%d" % (args.port, args.port + 9))
         return 1
