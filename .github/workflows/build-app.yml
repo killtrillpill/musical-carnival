@@ -96,3 +96,32 @@ jobs:
           "--- bat output ---"; Get-Content bat.out -ErrorAction SilentlyContinue; Get-Content bat.err -ErrorAction SilentlyContinue
           Get-Process python* -ErrorAction SilentlyContinue | Stop-Process -Force
           if (-not $up) { exit 1 }
+      - name: Click every panel button via API on Windows, check the app survives
+        shell: pwsh
+        timeout-minutes: 4
+        run: |
+          $env:VPN_GUARD_HOME = "$PWD\smoke3"
+          $p = Start-Process "VPN-Guard/python/pythonw.exe" -ArgumentList "VPN-Guard/app/vpn_guard.py","--no-browser","--port","47777" -PassThru
+          $sw = [Diagnostics.Stopwatch]::StartNew(); $up = $false
+          do { Start-Sleep -Milliseconds 400; try { Invoke-RestMethod 'http://127.0.0.1:47777/api/ping' -TimeoutSec 3 | Out-Null; $up = $true } catch {} } until ($up -or $sw.Elapsed.TotalSeconds -gt 20)
+          $h = @{ "X-Token" = (Get-Content smoke3/token).Trim() }
+          $base = "http://127.0.0.1:47777"
+          function Alive { try { Invoke-RestMethod "$base/api/ping" -TimeoutSec 5 | Out-Null; "alive" } catch { "DEAD" } }
+          $steps = @(
+            @("state","GET","/api/state",$null), @("processes","GET","/api/processes",$null), @("processes all","GET","/api/processes?all=1",$null),
+            @("diagnose","GET","/api/diagnose",$null), @("calibrate","POST","/api/calibrate","{}"), @("selftest","POST","/api/selftest","{}"),
+            @("autostart on","POST","/api/autostart",'{"on":true}'), @("autostart off","POST","/api/autostart",'{"on":false}'),
+            @("enable","POST","/api/config",'{"enabled":true}'), @("disable","POST","/api/config",'{"enabled":false}')
+          )
+          $bad = 0
+          foreach ($s in $steps) {
+            try {
+              if ($s[1] -eq "GET") { $r = Invoke-RestMethod ($base + $s[2]) -Headers $h -TimeoutSec 40 }
+              else { $r = Invoke-RestMethod ($base + $s[2]) -Method Post -Headers $h -ContentType "application/json" -Body $s[3] -TimeoutSec 40 }
+              $res = "ok"
+            } catch { $res = "ERROR: $($_.Exception.Message)"; $bad++ }
+            "$($s[0]): $res | app $(Alive)"
+          }
+          Get-Process pythonw -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (Test-Path smoke3/crash.log) { Get-Content smoke3/crash.log }
+          if ($bad -gt 0) { exit 1 }
