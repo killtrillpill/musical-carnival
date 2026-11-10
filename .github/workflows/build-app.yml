@@ -65,7 +65,21 @@ jobs:
           $r.checks | ForEach-Object { "$($_.ok) | $($_.title) | $($_.detail)" }
           $pr = Invoke-RestMethod "http://127.0.0.1:47888/api/processes" -Headers $h -TimeoutSec 20
           "processes: $($pr.names.Count)"
-          Stop-Process $p
+          # --- боевой тест: блокнот должен закрыться, потому что VPN-программы нет ---
+          $post = { param($b) Invoke-RestMethod "http://127.0.0.1:47888/api/config" -Method Post -Headers $h -ContentType "application/json" -Body ($b | ConvertTo-Json -Depth 5) -TimeoutSec 20 }
+          $np = Start-Process notepad.exe -PassThru
+          Start-Sleep 2
+          "notepad alive before: $(-not $np.HasExited)"
+          & $post @{ apps = @("notepad"); vpn = @{ process = "NoSuchVpnApp"; mode = "auto"; check = $true }; limits = @{ check_internet = $false; retries = 1; retry_delay_ms = 200 } } | Out-Null
+          & $post @{ enabled = $true } | Out-Null
+          Start-Sleep 6
+          $np.Refresh()
+          "notepad killed by guard: $($np.HasExited)"
+          $st2 = Invoke-RestMethod "http://127.0.0.1:47888/api/state" -Headers $h -TimeoutSec 20
+          "state: $($st2.status.status) | reason: $($st2.status.reason) | last_kill: $($st2.status.last_kill)"
+          $st2.events | ForEach-Object { "log: $($_.t) $($_.msg)" }
+          Stop-Process $p -ErrorAction SilentlyContinue
+          if (-not $np.HasExited) { Stop-Process $np; Write-Host "FAIL: notepad was NOT closed"; exit 1 }
       - uses: actions/upload-artifact@v4
         with:
           name: VPN-Guard-Windows
