@@ -125,3 +125,50 @@ jobs:
           Get-Process pythonw -ErrorAction SilentlyContinue | Stop-Process -Force
           if (Test-Path smoke3/crash.log) { Get-Content smoke3/crash.log }
           if ($bad -gt 0) { exit 1 }
+  exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $bmp = New-Object System.Drawing.Bitmap 64,64
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.SmoothingMode = 'AntiAlias'; $g.Clear([System.Drawing.Color]::Transparent)
+          $g.FillEllipse((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(36,87,214))), 2,2,60,60)
+          $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::White), 7
+          $pen.StartCap = 'Round'; $pen.EndCap = 'Round'; $pen.LineJoin = 'Round'
+          $g.DrawLines($pen, [System.Drawing.Point[]]@((New-Object System.Drawing.Point 18,33), (New-Object System.Drawing.Point 28,43), (New-Object System.Drawing.Point 46,21)))
+          $ico = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+          $fs = [IO.File]::Create("$PWD/icon.ico"); $ico.Save($fs); $fs.Close()
+      - name: Compile with Nuitka (real compiled exe, not a packed archive)
+        run: |
+          pip install nuitka ordered-set zstandard
+          python -m nuitka --standalone --assume-yes-for-downloads --windows-console-mode=disable --windows-icon-from-ico=icon.ico --company-name="VPN Guard" --product-name="VPN Guard" --file-description="VPN Guard" --file-version=1.0.0.0 --product-version=1.0.0.0 --output-filename="VPN Guard.exe" --output-dir=build vpn-guard/vpn_guard.py
+          Rename-Item build/vpn_guard.dist "VPN Guard"
+        shell: pwsh
+      - name: Scan with Microsoft Defender (real signatures)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          try { Update-MpSignature } catch { "signature update: $_" }
+          Start-MpScan -ScanType CustomScan -ScanPath "$PWD\build\VPN Guard"
+          $d = Get-MpThreatDetection
+          if ($d) { "DEFENDER DETECTIONS:"; $d | Format-List ThreatID, Resources, ProcessName } else { "Defender: no detections" }
+      - name: Smoke test the exe
+        shell: pwsh
+        run: |
+          $env:VPN_GUARD_HOME = "$PWD\smokeexe"
+          $p = Start-Process "build/VPN Guard/VPN Guard.exe" -ArgumentList "--no-browser","--port","47666" -PassThru
+          $sw = [Diagnostics.Stopwatch]::StartNew(); $up = $false
+          do { Start-Sleep -Milliseconds 500; try { Invoke-RestMethod 'http://127.0.0.1:47666/api/ping' -TimeoutSec 3 | Out-Null; $up = $true } catch {} } until ($up -or $sw.Elapsed.TotalSeconds -gt 30)
+          "exe: server up = $up after $($sw.Elapsed.TotalSeconds) s"
+          Stop-Process $p -Force -ErrorAction SilentlyContinue
+          if (-not $up) { if (Test-Path smokeexe/crash.log) { Get-Content smokeexe/crash.log }; exit 1 }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VPN-Guard-exe
+          path: build/VPN Guard
