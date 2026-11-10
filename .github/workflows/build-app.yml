@@ -9,13 +9,18 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - run: pip install pyinstaller
-      - name: Build single exe
-        working-directory: vpn-guard
-        run: pyinstaller --noconfirm --onefile --windowed --name "VPN Guard" vpn_guard.py
+      - name: Assemble portable folder (official Python + script, no packed exe)
+        shell: pwsh
+        run: |
+          $d = "VPN-Guard"
+          New-Item -ItemType Directory -Force "$d/python","$d/app" | Out-Null
+          Invoke-WebRequest "https://www.python.org/ftp/python/3.12.8/python-3.12.8-embed-amd64.zip" -OutFile py.zip
+          Expand-Archive py.zip "$d/python"
+          Copy-Item vpn-guard/vpn_guard.py "$d/app/"
+          Set-Content "$d/Запустить VPN Guard.bat" -Encoding ASCII -Value '@echo off', 'cd /d "%~dp0"', 'start "" "python\pythonw.exe" "app\vpn_guard.py"'
+          Set-Content "$d/Диагностика.bat" -Encoding ASCII -Value '@echo off', 'cd /d "%~dp0"', 'python\python.exe app\vpn_guard.py --diagnose', 'pause'
+          & "$d/python/python.exe" "$d/app/vpn_guard.py" --diagnose | Select-Object -First 5
       - uses: actions/upload-artifact@v4
         with:
           name: VPN-Guard-Windows
-          path: vpn-guard/dist/VPN Guard.exe
+          path: VPN-Guard
