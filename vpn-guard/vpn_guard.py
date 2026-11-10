@@ -1373,6 +1373,9 @@ def main(argv=None):
                 getattr(sys, name).reconfigure(encoding="utf-8", errors="replace")   # русский в консоли Windows
             except (AttributeError, ValueError):
                 pass
+    if os.environ.get("VPN_GUARD_TRACE"):             # отладка зависаний: через N секунд дамп стеков всех потоков
+        import faulthandler
+        faulthandler.dump_traceback_later(float(os.environ["VPN_GUARD_TRACE"]), file=open(os.path.join(config_dir(), "trace.txt"), "w"))
     ap = argparse.ArgumentParser(description="VPN Guard: блокирует выбранные приложения без VPN")
     ap.add_argument("--no-browser", action="store_true", help="не открывать панель в браузере")
     ap.add_argument("--diagnose", action="store_true", help="напечатать диагностику и выйти")

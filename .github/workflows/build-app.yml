@@ -25,13 +25,15 @@ jobs:
         timeout-minutes: 4
         run: |
           $env:VPN_GUARD_HOME = "$PWD\smoke"
+          $env:VPN_GUARD_TRACE = "10"
           $p = Start-Process "VPN-Guard/python/pythonw.exe" -ArgumentList "VPN-Guard/app/vpn_guard.py","--no-browser","--port","47888" -PassThru
           $sw = [Diagnostics.Stopwatch]::StartNew()
-          do { Start-Sleep -Milliseconds 300; try { Invoke-RestMethod 'http://127.0.0.1:47888/api/ping' -TimeoutSec 3 | Out-Null; $up = $true } catch { $up = $false } } until ($up -or $sw.Elapsed.TotalSeconds -gt 40)
+          do { Start-Sleep -Milliseconds 300; try { Invoke-RestMethod 'http://127.0.0.1:47888/api/ping' -TimeoutSec 3 | Out-Null; $up = $true } catch { $up = $false } } until ($up -or $sw.Elapsed.TotalSeconds -gt 20)
           "server up: $up after $($sw.Elapsed.TotalSeconds) s"
           if ($p.HasExited) { Write-Host "pythonw EXITED code $($p.ExitCode)"; if (Test-Path smoke/crash.log) { Get-Content smoke/crash.log }; exit 1 }
           $tok = (Get-Content smoke/token).Trim()
           $h = @{ "X-Token" = $tok }
+          if (-not $up) { Start-Sleep 3; "--- trace ---"; if (Test-Path smoke/trace.txt) { Get-Content smoke/trace.txt }; "--- crash ---"; if (Test-Path smoke/crash.log) { Get-Content smoke/crash.log }; Stop-Process $p; exit 1 }
           $st = Invoke-RestMethod "http://127.0.0.1:47888/api/state" -Headers $h -TimeoutSec 20
           "status: $($st.status.status) first_run: $($st.first_run)"
           $r = Invoke-RestMethod "http://127.0.0.1:47888/api/selftest" -Method Post -Headers $h -ContentType "application/json" -Body "{}" -TimeoutSec 40
