@@ -1359,6 +1359,11 @@ def main(argv=None):
     for name in ("stdout", "stderr"):
         if getattr(sys, name) is None:                  # приложение без консоли
             setattr(sys, name, open(os.devnull, "w"))
+        else:
+            try:
+                getattr(sys, name).reconfigure(encoding="utf-8", errors="replace")   # русский в консоли Windows
+            except (AttributeError, ValueError):
+                pass
     ap = argparse.ArgumentParser(description="VPN Guard: блокирует выбранные приложения без VPN")
     ap.add_argument("--no-browser", action="store_true", help="не открывать панель в браузере")
     ap.add_argument("--diagnose", action="store_true", help="напечатать диагностику и выйти")

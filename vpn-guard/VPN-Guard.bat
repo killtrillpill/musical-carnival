@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 >nul
 title VPN Guard
 cd /d "%~dp0"
 where py >nul 2>nul
