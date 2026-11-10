@@ -84,3 +84,15 @@ jobs:
         with:
           name: VPN-Guard-Windows
           path: VPN-Guard
+      - name: Test the repo launcher VPN-Guard.bat (what a user who downloads the repo zip runs)
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $env:VPN_GUARD_HOME = "$PWD\smoke2"
+          $p = Start-Process cmd.exe -ArgumentList '/c','vpn-guard\VPN-Guard.bat' -PassThru -RedirectStandardOutput bat.out -RedirectStandardError bat.err -WindowStyle Hidden
+          $sw = [Diagnostics.Stopwatch]::StartNew(); $up = $false
+          do { Start-Sleep -Milliseconds 500; try { Invoke-RestMethod 'http://127.0.0.1:47831/api/ping' -TimeoutSec 3 | Out-Null; $up = $true } catch {} } until ($up -or $sw.Elapsed.TotalSeconds -gt 30)
+          "bat launcher: server up = $up after $($sw.Elapsed.TotalSeconds) s"
+          "--- bat output ---"; Get-Content bat.out -ErrorAction SilentlyContinue; Get-Content bat.err -ErrorAction SilentlyContinue
+          Get-Process python* -ErrorAction SilentlyContinue | Stop-Process -Force
+          if (-not $up) { exit 1 }
