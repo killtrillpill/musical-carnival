@@ -1375,6 +1375,7 @@ def main(argv=None):
                 pass
     if os.environ.get("VPN_GUARD_TRACE"):             # отладка зависаний: через N секунд дамп стеков всех потоков
         import faulthandler
+        os.makedirs(config_dir(), exist_ok=True)
         faulthandler.dump_traceback_later(float(os.environ["VPN_GUARD_TRACE"]), file=open(os.path.join(config_dir(), "trace.txt"), "w"))
     ap = argparse.ArgumentParser(description="VPN Guard: блокирует выбранные приложения без VPN")
     ap.add_argument("--no-browser", action="store_true", help="не открывать панель в браузере")
